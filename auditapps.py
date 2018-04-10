@@ -317,7 +317,7 @@ def gen_report():
 from appJar import gui
 
 
-def add_report_entry_text(package, ver, row, column, bg="#fff", fg="#000"):
+def add_report_entry_text(package, ver, row, column, bg="#fff", fg="#000", extra=lambda: None):
   global ui
   ui.setSticky("ew")
   ui.setStretch("both")
@@ -335,6 +335,10 @@ def add_report_entry_text(package, ver, row, column, bg="#fff", fg="#000"):
   ui.addLabel(f'_{package}_[{ver}]', ver)
   ui.stopFrame()
 
+  ui.startFrame(f'_extra__{package}_[{ver}]', row=0, column=2)
+  extra()
+  ui.stopFrame()
+
   ui.stopFrame()
 
 
@@ -349,21 +353,16 @@ def add_report_entry(app_data={}, row=0):
   ui.setSticky("ew")
   bg = "#fff" if (row % 2 == 0) else "#ccc"
   if app_data['can_open']:
-    # fg = "#c22" if updated else "#000"
-    add_report_entry_text(package, version, row=row, column=0, bg=bg, fg="#c22" if updated else "#000")
-    ui.addNamedButton("open app", f'{IP} {package}', handle_open_app, row=row, column=1)
+    add_report_entry_text(package, version, row=row, column=0, bg=bg, fg="#c22" if updated else "#000", extra=lambda: ui.addNamedButton("open app", f'{IP} {package}', handle_open_app, row=row, column=1))
   else:
-    # fg = "#e44" if updated else "#333"
-    add_report_entry_text(package, version, row=row, column=0, bg=bg, fg="#e44" if updated else "#333")
-    ui.addLabel(f'label_{row}', "package contains no activities", row=row, column=1)
+    add_report_entry_text(package, version, row=row, column=0, bg=bg, fg="#e44" if updated else "#333", extra=lambda: ui.addLabel(f'label_{row}', "package contains no activities", row=row, column=1))
   ui.stopScrollPane()
 
 
-# when passed a job that needs handled in another thread, this will run it in another thread
-
-def threadulate(func, cb):
+# when passed a job that needs handled in another thread, this will run it in another thread, execute the (optional) specified callback method if provided
+def threadulate(func, cb=lambda: None):
   global ui
-  ui.threadCallback(func, cb)
+  return ui.threadCallback(func, cb)
 
 
 def handle_open_app(ip_package):
@@ -379,7 +378,7 @@ def update_progress(percent, msg=None):
 
 def initialize_ui():
   global ui
-  ui = gui("Betsy's Android TV Tools, Yes!", "1280x1024")
+  ui = gui("Betsy's Android TV Tools, Yes!", "800x600")
   reset_ui()
 
 
