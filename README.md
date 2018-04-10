@@ -1,5 +1,4 @@
-# batty
-Betsy's Android TV Tools, Yes!
+# Betsy's Android TV Tools, Yes!
 
 Requirements:
 * Python 3, ADB installed and in path, an Android TV on the same network as your machine
