@@ -157,7 +157,7 @@ def get_device_prop(ip):
   out = {}
   for entry in raw:
     if(entry):
-      key, value = entry.strip().split(": ")
+      key, value = entry.strip().split(": ", 1)
       out[key[1:-1]] = value[1:-1]
   return out
 
@@ -206,7 +206,7 @@ def process_app(ip, app_data, count):
   i = app_data[0]
   app_data = app_data[1].strip()
   app_data = app_data.replace("package:", "")
-  [apk, package] = app_data.split("=")
+  [apk, package] = app_data.split("=", 1)
   version = get_package_ver(ip, package)
   updated = is_updated(ip, package, version)
   out = { "apk": apk, "package": package, "version": version, "can_open": can_open_app(serial, package), "updated": updated }
@@ -366,7 +366,7 @@ def threadulate(func, cb=lambda: None):
 
 
 def handle_open_app(ip_package):
-  [ip, package] = ip_package.split(" ")
+  [ip, package] = ip_package.split(" ", 1)
   return open_app(ip, package)
 
 
