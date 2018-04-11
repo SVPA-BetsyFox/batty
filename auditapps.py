@@ -5,7 +5,7 @@ import ssl
 ssl._create_default_https_context = ssl._create_unverified_context
 DEBUG = False
 DUMMY = False
-GO_BUTTON = "yoink"
+GO_BUTTON = "Audit Applications"
 
 SUBSEQUENT_REPORT = False
 
@@ -78,7 +78,7 @@ def execute(cmd):
     return out.decode('utf-8')
   except Exception as e:
     print(e)
-  return False
+    return f"ERROR WHILE EXECUTING COMMAND\n{cmd}\nERROR WAS: {e}"
   
 
 
