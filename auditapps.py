@@ -8,6 +8,7 @@ DUMMY = False
 GO_BUTTON = "Audit Applications"
 
 SUBSEQUENT_REPORT = False
+REPORT_IS_RUNNING = False
 
 ###########################################
 #   GLOBAL STUFF JUST LIKE THE OLD DAYS   #
@@ -17,6 +18,7 @@ SERIAL = ""
 IP = ""
 CONFIG = {}
 
+CONTROL_ID = 0 # gonna name all our controls with numbers, we don't ever need to update them anyway...
 
 # This line ensures all our strings are handled properly as utf8, because this doesn't seem to be the default
 sys.stdout = codecs.getwriter('utf8')(sys.stdout.buffer)
@@ -32,6 +34,12 @@ prop_mapping = {
   'ipaddress': 'dhcp.wlan0.ipaddress',
   'panelsize': 'ro.svp.panel_inch'
 }
+
+# to help prevent naming conflicts
+def next():
+  global CONTROL_ID
+  CONTROL_ID += 1
+  return CONTROL_ID
 
 
 # Loads in a file as JSON format, returns parsed data
@@ -210,7 +218,7 @@ def process_app(ip, app_data, count):
   version = get_package_ver(ip, package)
   updated = is_updated(ip, package, version)
   out = { "apk": apk, "package": package, "version": version, "can_open": can_open_app(serial, package), "updated": updated }
-  update_progress((i / count) * 100, f'Processing: {package}... ')
+  update_progress((i / count) * 100, f'{package}')
   debug(out)
   return out
 
@@ -242,9 +250,11 @@ def clean_string(s):
   return re.sub("[^a-zA-Z0-9.-_/]", "", s)
 
 def gen_report():
-  global CONFIG, SERIAL, IP, ui
+  global CONFIG, SERIAL, IP, REPORT_IS_RUNNING, ui
+  if REPORT_IS_RUNNING: return None
+  REPORT_IS_RUNNING = True
   ui.setButtonState(GO_BUTTON, "disabled")
-  ip = ui.getEntry("ip address")
+  ip = ui.getEntry("IP Address")
   CONFIG["ip address"] = ip
   save_json("config.json", CONFIG)
   if SUBSEQUENT_REPORT:
@@ -321,21 +331,21 @@ def add_report_entry_text(package, ver, row, column, bg="#fff", fg="#000", extra
   global ui
   ui.setSticky("ew")
   ui.setStretch("both")
-  ui.startFrame(f'_frame_[{package}_{ver}]', row=row, column=column)
+  ui.startFrame(f'{next()}_frame_[{package}_{ver}]', row=row, column=column)
   ui.setFg(fg)
   ui.setBg(bg)
 
   ui.setSticky("w")
-  ui.startFrame(f'_frame_[{package}]_{ver}', row=0, column=0)
-  ui.addLabel(f'_[{package}]_{ver}', package)
+  ui.startFrame(f'{next()}_frame_[{package}]_{ver}', row=0, column=0)
+  ui.addLabel(f'{next()}_[{package}]_{ver}', package)
   ui.stopFrame()
 
   ui.setSticky("e")
-  ui.startFrame(f'_frame__{package}_[{ver}]', row=0, column=1)
-  ui.addLabel(f'_{package}_[{ver}]', ver)
+  ui.startFrame(f'{next()}_frame__{package}_[{ver}]', row=0, column=1)
+  ui.addLabel(f'{next()}_{package}_[{ver}]', ver)
   ui.stopFrame()
 
-  ui.startFrame(f'_extra__{package}_[{ver}]', row=0, column=2)
+  ui.startFrame(f'{next()}_extra__{package}_[{ver}]', row=0, column=2)
   extra()
   ui.stopFrame()
 
@@ -353,9 +363,9 @@ def add_report_entry(app_data={}, row=0):
   ui.setSticky("ew")
   bg = "#fff" if (row % 2 == 0) else "#ccc"
   if app_data['can_open']:
-    add_report_entry_text(package, version, row=row, column=0, bg=bg, fg="#c22" if updated else "#000", extra=lambda: ui.addNamedButton("open app", f'{IP} {package}', handle_open_app, row=row, column=1))
+    add_report_entry_text(package, version, row=row, column=0, bg=bg, fg="#c22" if updated else "#000", extra=lambda: ui.addNamedButton("open app", f'LAUNCH BUTTON #{next()}', lambda x: handle_open_app(IP, package), row=row, column=1))
   else:
-    add_report_entry_text(package, version, row=row, column=0, bg=bg, fg="#e44" if updated else "#333", extra=lambda: ui.addLabel(f'label_{row}', "package contains no activities", row=row, column=1))
+    add_report_entry_text(package, version, row=row, column=0, bg=bg, fg="#e44" if updated else "#333", extra=lambda: ui.addLabel(f'{next()}label_{row}', "package contains no activities", row=row, column=1))
   ui.stopScrollPane()
 
 
@@ -365,9 +375,13 @@ def threadulate(func, cb=lambda: None):
   return ui.threadCallback(func, cb)
 
 
-def handle_open_app(ip_package):
-  [ip, package] = ip_package.split(" ", 1)
-  return open_app(ip, package)
+def handle_open_app(ip, package):
+  try:
+    return open_app(ip, package)
+  except Exception as e:
+    print(e)
+    return False
+  
 
 
 def update_progress(percent, msg=None):
@@ -378,7 +392,7 @@ def update_progress(percent, msg=None):
 
 def initialize_ui():
   global ui
-  ui = gui("Betsy's Android TV Tools, Yes!", "800x600")
+  ui = gui("Betsy's Android TV Tools, Yes!", "1024x768")
   reset_ui()
 
 
@@ -387,6 +401,8 @@ def clear_ui():
   ui.removeAllWidgets()
 
 def allow_click(x):
+  global REPORT_IS_RUNNING
+  REPORT_IS_RUNNING = False
   ui.setButtonState(GO_BUTTON, "normal")
 
 def reset_ui(ip=""):
@@ -400,8 +416,8 @@ def reset_ui(ip=""):
 
   ui.setSticky("news")
 
-  ui.addLabelEntry("ip address", row=0, column=0)
-  ui.setEntry("ip address", ip)
+  ui.addLabelEntry("IP Address", row=0, column=0)
+  ui.setEntry("IP Address", ip)
 
   ui.addButton(GO_BUTTON, lambda: threadulate(gen_report, allow_click), row=0, column=1)
   # ui.addButton("deeeeebug", lambda: clear_ui(), row=-1, column=2)
