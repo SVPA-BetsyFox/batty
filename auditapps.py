@@ -134,7 +134,7 @@ def is_updated(ip, package, version):
   global SERIAL
   last_report = load_json("report.json")
   if not last_report: return False
-  if (SERIAL not in last_report) or (version != last_report[SERIAL]["apps"][package]["version"]):
+  if (SERIAL not in last_report) or (package not in last_report[SERIAL]["apps"]) or (version != last_report[SERIAL]["apps"][package]["version"]):
     return True
   else:
     return False
@@ -214,7 +214,7 @@ def process_app(ip, app_data, count):
   i = app_data[0]
   app_data = app_data[1].strip()
   app_data = app_data.replace("package:", "")
-  [apk, package] = app_data.split("=", 1)
+  [apk, package] = app_data.rsplit("=", 1)
   version = get_package_ver(ip, package)
   updated = is_updated(ip, package, version)
   out = { "apk": apk, "package": package, "version": version, "can_open": can_open_app(serial, package), "updated": updated }
