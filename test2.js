@@ -1,14 +1,26 @@
 var debug = {
-    get: function(obj, prop) {
-      console.log(`===== [DEBUG] "${prop}" was called`)
-      return prop in obj ? obj[prop] : undefined;
-    }
-};
+    get: function(obj, prop, receiver) {
+      // console.log(`===== [DEBUG] "${prop}" was called`);
+      if (prop in obj) {
+        if (typeof obj[prop] != "function") {
+          return obj[prop];
+        } else {
+          return (...args) => {
+            // if (prop == "queue") console.log(prop + " was called with " + args[0]);
+            return obj[prop](...args);
+          }
+        }
+      } else {
+        return undefined;
+      }
+      }
+  }
 
 var Jatty = function(ip="172.30.7.97") {
   const { spawn, spawnSync } = require('child_process');
   const PROMPT = /shell@[A-Za-z0-9-_.]+:\/ \$/;
   const DEFAULT_TIMEOUT = 10000;
+  const PROCESS_TIMEOUT = 30000;
 
   var adb, timeout;
   var running = false;
@@ -21,15 +33,9 @@ var Jatty = function(ip="172.30.7.97") {
   var finish = () => process.exit(0);
   var stop_timer = () => clearTimeout(timeout);
 
-  var reset_timer = function(t=DEFAULT_TIMEOUT) {
-    clearTimeout(timeout);
-    timeout = setTimeout(() => stop(), t);
-  }
-
-
   var pause = () => running = false;
   var play = () => current_task ? send(current_task["cmd"]) : send();
-  var queue = (cmd, cb=(x)=>x, clean=(y)=>y) => tasks.push({cmd: cmd, cb: cb, clean: clean});
+  var queue = (cmd, cb=(x)=>x, clean=(y)=>y) => { let _running = running; running = false; tasks.push({cmd: cmd, cb: cb, clean: clean}); running = _running; };
 
 
   var stop = function(stopcode=0) {
@@ -42,14 +48,16 @@ var Jatty = function(ip="172.30.7.97") {
 
 
   var connect = function(msg) {
-    if (msg !== undefined) console.log(msg);
+    // if (msg !== undefined) console.log(msg);
     status = spawnSync('adb', ['connect', ip]).toString();    
     adb = spawn('adb', ['shell']);
+    // adb.stdout.pipe(process.stdout);
     adb.on('exit', () => connect());
     adb.stdout.on('readable', () => recieve(adb.stdout.read()));
     adb.stdout.on('end', () => connect("RECONNECTING..."));
     adb.stdout.on('finish', () => console.error('All writes are now complete.'));
   }
+
 
   var tasks = [];//[{cmd: "pm list packages -f", clean: clean }, {cmd: "exit", clean: finish}];
   var current_task = {};
@@ -62,8 +70,8 @@ var Jatty = function(ip="172.30.7.97") {
     clearTimeout(timeout);
     timeout = setTimeout(() => {
       flush();
-      console.log("----------------------------------------------------------------------");
-      console.log(output);
+      // console.log("----------------------------------------------------------------------");
+      // console.log(output);
       process.exit(1);
     },
     t)
@@ -86,11 +94,10 @@ var Jatty = function(ip="172.30.7.97") {
 
 
   var recieve = function(data) {
-    // console.log(`ms since last data is: ${Date.now() - last_output_ts}`);
-    process.stdout.write("=");
+    process.stdout.write(".");
     if ((data == undefined) || (data == null)) {
-      if (Date.now() - last_output_ts > 10000) flush();
-      if (Date.now() - last_output_ts > 30000) process.exit("OH GOD TIMEOUT");
+      if (Date.now() - last_output_ts > DEFAULT_TIMEOUT) flush();
+      if (Date.now() - last_output_ts > PROCESS_TIMEOUT) process.exit("OH GOD TIMEOUT");
       return;
     }
     if (PROMPT.test(data)) flush();
@@ -101,9 +108,11 @@ var Jatty = function(ip="172.30.7.97") {
 
 
   var send = function(data="") {
-    running = true;
+    running = false;
     reset_timer();
+    // setTimeout(() => running = false, 100);
     adb.stdin.write(data + "\n");
+    running = true;
     if (data == "exit") stop();
   }
 
@@ -131,7 +140,8 @@ j.connect();
 
 let clean_package = (x) => x.substr(x.lastIndexOf("=") + 1);
 // I'm so, so sorry, future-me. 4 layers of callbacks, and this is barely the tip. 😞
-j.queue("pm list packages -f", (x) => x.forEach(y => j.queue(`dumpsys package ${y.trim()} | grep versionName`, z => console.log(z)),), (a) => clean_lines(a).map(clean_package));
+// j.queue("pm list packages -f", (x) => x.filter(a => !(/\//.test(a))).forEach(y => j.queue(`dumpsys package ${y.trim()} | grep versionName`, z => console.log("I AM THE NESTED ONE " + y.trim() + z), (b) => b.substr(b.lastIndexOf("versionName=")).trim())), (a) => clean_lines(a).map(clean_package));
+j.queue("pm list packages -f", (x) => x.filter(a => !(/\//.test(a))).forEach(y => j.queue(`dumpsys package ${y.trim()} | grep versionName`, z => console.log(JSON.stringify([y, z])), (b) => b.substr(b.lastIndexOf("versionName=")).trim())), (a) => clean_lines(a).map(clean_package));
 // j.queue("ls", (x) => x.forEach(y => j.queue(`ls ${y}`, z => console.log(z)),), clean_lines);
 
 j.play();
