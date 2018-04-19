@@ -1,4 +1,9 @@
-
+var debug = {
+    get: function(obj, prop) {
+      console.log(`===== [DEBUG] "${prop}" was called`)
+      return prop in obj ? obj[prop] : undefined;
+    }
+};
 
 var Jatty = function(ip="172.30.7.97") {
   const { spawn, spawnSync } = require('child_process');
@@ -9,8 +14,10 @@ var Jatty = function(ip="172.30.7.97") {
   var running = false;
   var temp = [];
   var output = [];
+  // var _debug = true;
 
   // var clean = (x="") => x.toString().replace("\r", "");
+  // var debug = (x) => _debug ? console.log(x) : null;
   var finish = () => process.exit(0);
   var stop_timer = () => clearTimeout(timeout);
 
@@ -22,7 +29,7 @@ var Jatty = function(ip="172.30.7.97") {
 
   var pause = () => running = false;
   var play = () => current_task ? send(current_task["cmd"]) : send();
-  var queue = (cmd, cb=(x)=>x, clean=(x)=>x) => tasks.push({cmd: cmd, cb: cb, clean: clean});
+  var queue = (cmd, cb=(x)=>x, clean=(y)=>y) => tasks.push({cmd: cmd, cb: cb, clean: clean});
 
 
   var stop = function(stopcode=0) {
@@ -30,7 +37,7 @@ var Jatty = function(ip="172.30.7.97") {
     flush();
     console.log("LAST OUTPUT:");
     console.log(output)
-    process.exit(stopcode);
+    // process.exit(stopcode);
   }
 
 
@@ -38,6 +45,7 @@ var Jatty = function(ip="172.30.7.97") {
     if (msg !== undefined) console.log(msg);
     status = spawnSync('adb', ['connect', ip]).toString();    
     adb = spawn('adb', ['shell']);
+    adb.on('exit', () => connect());
     adb.stdout.on('readable', () => recieve(adb.stdout.read()));
     adb.stdout.on('end', () => connect("RECONNECTING..."));
     adb.stdout.on('finish', () => console.error('All writes are now complete.'));
@@ -65,20 +73,15 @@ var Jatty = function(ip="172.30.7.97") {
   var flush = function() {
     stop_timer();
     if (current_task && "clean" in current_task) {
-      console.log('THERE IS A CLEAN FUNCTION, CALLING IT')
-      // console.log(`CALLING CB ON "${temp}", which is of type ${typeof temp}`);
       temp = current_task["clean"](temp.join(""));
     }
-    console.log("TEMP STUFF AT FLUSHING TIEM: " + temp);
-    // if (temp.join != undefined) temp = temp.join("")
     output = temp;
     temp = [];
-    console.log('-'.repeat(80))
-    console.log((current_task && "cb" in current_task) ? current_task["cb"](output) : output);
-    console.log('-'.repeat(80))
+    (current_task && "cb" in current_task) ? current_task["cb"](output) : null;
     if (running && (current_task = tasks.shift()) !== undefined && "cmd" in current_task) {
       send(current_task["cmd"]);
     }
+    return output;
   }
 
 
@@ -87,7 +90,7 @@ var Jatty = function(ip="172.30.7.97") {
     process.stdout.write("=");
     if ((data == undefined) || (data == null)) {
       if (Date.now() - last_output_ts > 10000) flush();
-      if (Date.now() - last_output_ts > 30000) process.quit("OH GOD TIMEOUT");
+      if (Date.now() - last_output_ts > 30000) process.exit("OH GOD TIMEOUT");
       return;
     }
     if (PROMPT.test(data)) flush();
@@ -120,14 +123,17 @@ var Jatty = function(ip="172.30.7.97") {
   }
 }
 
-let clean_lines = (x) => {
-  console.log('CLEAN LINES WAS CALLED');
-  return x.split(/\r?\n/).map(y => y.trim());
-}
+let clean_lines = (x) => x.split(/\r?\n/).map(y => y.trim()).filter(z => z != "");
 
-j = new Jatty();
+// j = new Jatty();
+j = new Proxy(new Jatty(), debug);
 j.connect();
-j.queue("ls", (x)=>x, clean_lines);
+
+let clean_package = (x) => x.substr(x.lastIndexOf("=") + 1);
+// I'm so, so sorry, future-me. 4 layers of callbacks, and this is barely the tip. 😞
+j.queue("pm list packages -f", (x) => x.forEach(y => j.queue(`dumpsys package ${y.trim()} | grep versionName`, z => console.log(z)),), (a) => clean_lines(a).map(clean_package));
+// j.queue("ls", (x) => x.forEach(y => j.queue(`ls ${y}`, z => console.log(z)),), clean_lines);
+
 j.play();
 // j.stop();
 // j.pause();
