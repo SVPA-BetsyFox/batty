@@ -1,0 +1,22 @@
+{
+  "name": "batty",
+  "version": "0.0.9",
+  "description": "Betsy's Android TV Tools, Yes!",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SVPA-BetsyFox/batty.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/SVPA-BetsyFox/batty/issues"
+  },
+  "homepage": "https://github.com/SVPA-BetsyFox/batty#readme",
+  "dependencies": {
+    "blessed": "^0.1.81"
+  }
+}
