@@ -1,91 +1,108 @@
-var blessed = require('blessed');
+var blessed = require('blessed')
+let format_row = (x) => x.map(x => x.map(y => y.toString()));
 
-// Create a screen object.
+let filter_openable = () => {
+  console.log("filtering to openable shit");
+  table.setData(format_row(data2.filter(x => x[2])));
+  screen.render();
+  }
+
+let filter = (query) => {
+  table.setData(data2.filter(x => x[0].includes(query)));
+  screen.render();
+  }
+
 var screen = blessed.screen({
-  smartCSR: true
+  autoPadding: false,
 });
 
-screen.title = 'Jatty';
+var _chose_item = () => undefined;
 
-// Create a window perfectly centered horizontally and vertically.
-var window = blessed.box({
-  top: 'top',
-  left: 'left',
+var table = blessed.listtable({
+  //parent: screen,
+  top: 'center',
+  left: 'center',
+  data: null,
+  border: false,
+  align: 'center',
+  tags: true,
+  keys: true,
   width: '100%',
-  height: '100%',
-  // content: ' Hello {bold}world{/bold}!',
-  tags: true,
-  border: {
-    type: 'line'
-  },
-  style: {
-    fg: 'white',
-    bg: 'black',
-    // border: { type: 'none' },
-    //   fg: '#f0f0f0'
-    // },
-    // hover: {
-    //   bg: 'green'
-    // }
-  }
-});
-
-// Append our window to the screen.
-screen.append(window);
-
-var fnord = blessed.box({
-  parent: window,
-  scrollable: true,
-  top: 'top',
-  left: 'left',
-  width: '50%',
+  // width: 'shrink',
   height: '100%-2',
-  content: ' d',
-  tags: true,
-  border: {
-    type: 'line'
-  },
+  vi: true,
+  mouse: true,
   style: {
-    scrollbar: {
-      bg: 'blue'
+    header: {
+      fg: 'blue',
+      bold: true
     },
-    fg: 'white',
-    bg: 'black',
-    border: {
-      fg: '#f0f0f0'
-    },
-    // hover: {
-    //   bg: 'green'
-    // }
+    cell: {
+      fg: 'magenta',
+      selected: {
+        bg: 'blue'
+      }
+    }
   }
 });
 
-// If our window is clicked, change the content.
-window.on('click', function(data) {
-  window.setContent('{center}Some different {red-fg}content{/red-fg}.{/center}');
-  screen.render();
+var title = blessed.text({
+  parent: screen,
+  top: 0,
+  left: 0,
+  width: '100%',
+  content: 'Test'
 });
 
-// If window is focused, handle `enter`/`return` and give us some more content.
-window.key('enter', function(ch, key) {
-  window.setContent('{right}Even different {black-fg}content{/black-fg}.{/right}\n');
-  window.setLine(1, 'bar');
-  window.insertLine(1, 'foo');
-  screen.render();
+
+var data2 = [
+  [ 'Package',  'Version',  'Can Open?',   'Options' ],
+];
+
+
+
+// data2[1][0] = '{red-fg}' + data2[1][0] + '{/red-fg}';
+
+
+screen.key(['q', 'escape'], function() {
+  return screen.destroy();
 });
 
-// Quit on Escape, q, or Control-C.
-screen.key(['escape', 'q', 'C-c'], function(ch, key) {
-  return process.exit(0);
+screen.key(['z'], function() {
+  () => _chose_item(data2[table.selected][0]);
 });
 
-// for(var i=9;i>0;i++) fnord.insertBottom(i);
-i = "whaaaaat"
-for(var i=99;i>0;i--) fnord.insertBottom(i.toString());
-// 
-// Focus our element.
-window.focus();
+screen.key(['enter'], function() {
+  filter_openable();
+});
 
 
-// Render the screen.
+table.focus();
+
+table.setData(data2);
+
+screen.append(table);
+
+// data2.push(["what", "what", "what","what"])
+// data2.push([])
+table.setData(data2);
+
 screen.render();
+
+// var chose_item = () => undefined;
+
+module.exports = {
+  chose_item: (xxx) => _chose_item = xxx,
+  clear: (row) => {
+    data2.push(row);
+    table.setData(data2);
+    screen.render();
+  },
+  add: (row) => {
+    data2.push(row);
+    table.setData(format_row(data2));
+    screen.render();
+  },
+  filter: filter,
+  filter_openable: filter_openable
+}

@@ -1,4 +1,4 @@
-console.log("I'M IN JATTY.JS");
+// console.log("I'M IN JATTY.JS");
 var debug = {
     get: function(obj, prop, receiver) {
       // console.log(`===== [DEBUG] "${prop}" was called`);
@@ -42,10 +42,10 @@ var Jatty = function(ip="172.30.7.97") {
 
 
   var stop = function(stopcode=0) {
-    console.log("-    -   -  - - -----= Stop was called- flushing and quitting =----- - -  -   -    -");
+    // console.log("-    -   -  - - -----= Stop was called- flushing and quitting =----- - -  -   -    -");
     flush();
-    console.log("LAST OUTPUT:");
-    console.log(output)
+    // console.log("LAST OUTPUT:");
+    // console.log(output)
     // process.exit(stopcode);
   }
 
@@ -97,7 +97,7 @@ var Jatty = function(ip="172.30.7.97") {
 
 
   var recieve = function(data) {
-    process.stdout.write(".");
+    // process.stdout.write(".");
     if ((data == undefined) || (data == null)) {
       if (Date.now() - last_output_ts > DEFAULT_TIMEOUT) flush();
       if (Date.now() - last_output_ts > PROCESS_TIMEOUT) process.exit("OH GOD TIMEOUT");
