@@ -29,6 +29,7 @@ var Jatty = function(ip="172.30.7.97") {
   var running = false;
   var temp = [];
   var output = [];
+  let jobs = { total: 0, remaining: 0 };
   // var _debug = true;
 
   // var clean = (x="") => x.toString().replace("\r", "");
@@ -38,7 +39,7 @@ var Jatty = function(ip="172.30.7.97") {
 
   var pause = () => running = false;
   var play = () => current_task ? send(current_task["cmd"]) : send();
-  var queue = (cmd, cb=(x)=>x, clean=(y)=>y) => { let _running = running; running = false; tasks.push({cmd: cmd, cb: cb, clean: clean}); running = _running; };
+  var queue = (cmd, cb=(x)=>x, clean=(y)=>y) => { let _running = running; running = false; tasks.push({cmd: cmd, cb: cb, clean: clean}); running = _running; jobs.total++; jobs.remaining++; };
 
 
   var stop = function(stopcode=0) {
@@ -46,7 +47,8 @@ var Jatty = function(ip="172.30.7.97") {
     flush();
     // console.log("LAST OUTPUT:");
     // console.log(output)
-    // process.exit(stopcode);
+    process.exit(stopcode);
+    return true;
   }
 
 
@@ -92,6 +94,7 @@ var Jatty = function(ip="172.30.7.97") {
     if (running && (current_task = tasks.shift()) !== undefined && "cmd" in current_task) {
       send(current_task["cmd"]);
     }
+    jobs.remaining--;
     return output;
   }
 
@@ -119,6 +122,8 @@ var Jatty = function(ip="172.30.7.97") {
     if (data == "exit") stop();
   }
 
+  var status = () => (jobs.total > 0) ? 100 - Math.trunc((jobs.remaining / jobs.total) * 100) : 100;
+
   return {
     connect: connect,
     send: send,
@@ -132,6 +137,7 @@ var Jatty = function(ip="172.30.7.97") {
     finish: finish,
 
     reset_timer: reset_timer,
+    status: status,
   }
 }
 
