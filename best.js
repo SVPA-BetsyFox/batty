@@ -1,6 +1,37 @@
 var blessed = require('blessed')
 var fs = require('fs')
-let OUTPUT_SIZE = "5";
+let OUTPUT_SIZE = 5;
+
+
+
+class Data {
+  constructor(...fieldnames) {
+    this.fieldnames = fieldnames;
+    this.obj = {};
+  }
+
+  update(id, fieldname, value) {
+    if (!fieldname in this.fieldnames) return false;
+    if (!(id in this.obj)) this.obj[id] = {};
+    this.obj[id][fieldname] = value;
+    return true;
+  }
+
+  read(id) {
+    if (id in this.obj) return this.fieldnames.map(fieldname => (fieldname in this.obj[id]) ? this.obj[id][fieldname] : "");
+    else return this.fieldnames.map(x => "");
+  }
+
+  all() {
+    let out = [this.fieldnames];
+    for (let id of Object.keys(this.obj)) {
+      out.push(this.read(id));
+    }
+    return out;
+  }
+}
+
+
 
 let save = function(filename, data) {
   let success = true;
@@ -62,7 +93,7 @@ var table = blessed.listtable({
   tags: true,
   keys: true,
   width: '100%',
-  height: '50%',
+  height: '100%-7',
   mouse: true,
   style: {
     header: {
@@ -80,11 +111,12 @@ var table = blessed.listtable({
   }
 });
 
-var box = blessed.log({
+var logger = blessed.log({
+  scrollOnInput: true,
   parent: screen,
   scrollable: true,
   alwaysScroll: true,
-  top: "50%+1",
+  top: "100%-6",
   wrap: true,
   border: false,
   valign: 'bottom',
@@ -92,11 +124,14 @@ var box = blessed.log({
   mouse: true,
   keys: true,
   width: '100%',
-  height: '50%',
+  height: OUTPUT_SIZE - 1,
   style: {
   },
-  content: loop(255, (i, n) => "#" + i.toString(16).padStart(6, "0")).join("\n")
+  content: ""
 });
+
+log = (x) => logger.log(x);
+
 
 var progress = blessed.progressbar({
   top: "100%-1",
@@ -112,10 +147,7 @@ var progress = blessed.progressbar({
   },
   ch: " ",
   width: '100%',
-  height: 3,
-  // right: 0,
-  // bottom: 0,
-  filled: 50
+  filled: 0,
 });
 
 var title = blessed.text({ parent: screen, top: '1', tags: true, content: 'Android TV Tools, {red-fg}Yes!{/red-fg}' });
@@ -123,10 +155,6 @@ var title = blessed.text({ parent: screen, top: '1', tags: true, content: 'Andro
 
 var data = [ [ 'Package',  'Version',  'Can Open?',   'Options' ] ];
 
-// let debug = (x) => box.
-
-// data[1][0] = '{red-fg}' + data[1][0] + '{/red-fg}';
-// screen.on('destroy', () => console.log("HAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHA"));
 
 screen.key(['q', 'escape'], function() {
   console.log("Exiting...");
@@ -139,7 +167,7 @@ screen.key(['z'], function() {
 });
 
 screen.key(['enter'], function() {
-  filter_openable();
+  log(data[table.selected][0]);
 });
 
 
@@ -149,42 +177,21 @@ table.setData(data);
 
 screen.append(table);
 screen.append(title);
+screen.append(logger);
 screen.append(progress);
 
-// data.push(["what", "what", "what","what"])
-// data.push([])
+
 table.setData(data);
 
 screen.render();
 
 progress.on('complete', () => save('data.json', data));
 
-// var chose_item = () => undefined;
 
-// module.exports = {
-//   chose_item: (xxx) => _chose_item = xxx,
-//   clear: (row) => {
-//     data.push(row);
-//     table.setData(data);
-//     screen.render();
-//   },
-//   add: (row) => {
-//     data.push(row);
-//     table.setData(format_row(data));
-//     screen.render();
-//   },
-//   filter: filter,
-//   filter_openable: filter_openable
-// }
-// 
 const {Jatty, JattyDebug} =  require('./jatty');
-// const UI = require('./best');
 
-// UI.chose_item = (x) => console.log(x);
-// console.log(UI);
 
-j = Jatty();
-// j = JattyDebug();
+j = Jatty("172.30.7.97", logger);
 j.connect();
 
 let pass_thru = (x) => x;
@@ -192,8 +199,9 @@ let add_entry = (z, y) => add([y, z, [true, false][Math.floor(Math.random()*2)]]
 let clean_lines = (x) => x.split(/\r?\n/).map(y => y.trim()).filter(z => z != "");
 let clean_version = (b) => b.substr(b.lastIndexOf("versionName=")).trim();
 let clean_package = (x) => x.substr(x.lastIndexOf("=") + 1);
+let can_open_package = (x) => j.queue(`monkey -p ${x} 0`, (x) => add_entry(x, y), clean_version);
 let do_package_version = (y) => j.queue(`dumpsys package ${y.trim()} | grep versionName`, (x) => add_entry(x, y), clean_version);
-let do_all_package_versions = (x) => x.filter(a => !(/[\/ ]/.test(a))).forEach(do_package_version);
+let do_all_package_versions = (x) => { x.filter(a => !(/[\/ ]/.test(a))).forEach(do_package_version); log("All work queued successfully!"); }
 let clean_everything = (a) => clean_lines(a).map(clean_package);
 
 j.queue("pm list packages -f", do_all_package_versions, clean_everything);
