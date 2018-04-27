@@ -1,19 +1,43 @@
 var blessed = require('blessed')
 var fs = require('fs')
-let OUTPUT_SIZE = 5;
+let OUTPUT_SIZE = 6;
 
+//field labels
+const PACKAGE = 'Package';
+const VERSION = 'Version';
+const CANOPEN = 'Can Open?';
+const OPTIONS = 'Options';
 
 
 class Data {
   constructor(...fieldnames) {
+    this.debug = "";
+    // save("data", fieldnames)q
+    this.cb = (typeof fieldnames[0] == "function") ? this.cb = fieldnames.shift() : () => undefined;
     this.fieldnames = fieldnames;
     this.obj = {};
   }
 
+  persist() {
+    return save("data.json", this.obj);
+  }
+
+  restore() {
+    this.obj = load("data.json");
+  }
+
+  record_complete(id) {
+    // Object.keys(this.obj[id]).sort() == this.fieldnames.sort();
+    // save("record.json", { record: Object.keys(this.obj[id]).sort(), base: this.fieldnames.sort() })
+  }
+
   update(id, fieldname, value) {
+    this.debug += `UPDATE CALLED WITH ID="${id}", FIELD="${fieldname}", VALUE="${value}"` + "-".repeat(25) + "\n";
+    save("debug.txt", this.debug, true);
     if (!fieldname in this.fieldnames) return false;
     if (!(id in this.obj)) this.obj[id] = {};
     this.obj[id][fieldname] = value;
+    if(Object.keys(this.obj[id])) this.cb(id);
     return true;
   }
 
@@ -23,23 +47,26 @@ class Data {
   }
 
   all() {
-    let out = [this.fieldnames];
-    for (let id of Object.keys(this.obj)) {
+    let out = [];
+    for (let id of Object.keys(this.obj).sort()) {
       out.push(this.read(id));
     }
+    // out.sort((a, b) => a[0].localeCompare(b[0]));
+    out.unshift(this.fieldnames);
     return out;
   }
 }
 
 
 
-let save = function(filename, data) {
+let save = function(filename, serializable, raw=false) {
   let success = true;
-  fs.writeFile(filename, JSON.stringify(data), (err) => success = false);
+  serializable = raw ? serializable : JSON.stringify(serializable)
+  fs.writeFile(filename, serializable, (err) => success = false);
   return success;
 }
 
-let format_row = (x) => x.map(x => x.map(y => y.toString()));
+let format_rows = (x) => x.map(x => x.map(y => y.toString()));
 
 let loop = (n=1, func, ...args) =>  {
   let out = [];
@@ -49,28 +76,31 @@ let loop = (n=1, func, ...args) =>  {
 
 let filter_openable = () => {
   console.log("filtering to openable stuff");
-  table.setData(format_row(data.filter(x => x[2])));
+  table.setData(format_rows(data.all().filter(x => x[2])));
   screen.render();
   }
 
 
 let filter = (query) => {
-  table.setData(data.filter(x => x[0].includes(query)));
+  table.setData(data.all().filter(x => x[0].includes(query)));
   screen.render();
   }
 
 
 let clear = (row) => {
-    data.push(row);
-    table.setData(data);
+    // data.push(row);
+    table.setData(data.all());
     screen.render();
   }
 
 
 let add = (row) => {
     progress.setProgress(j.status());
-    data.push(row);
-    table.setData(format_row(data));
+    let selected = table.selected;
+    let scroll = table.getScroll();
+    table.setData(format_rows(data.all()));
+    table.setScroll(scroll);
+    table.selected = selected;
     screen.render();
   }
 
@@ -93,7 +123,7 @@ var table = blessed.listtable({
   tags: true,
   keys: true,
   width: '100%',
-  height: '100%-7',
+  height: `100%-${OUTPUT_SIZE + 1}`,
   mouse: true,
   style: {
     header: {
@@ -116,7 +146,7 @@ var logger = blessed.log({
   parent: screen,
   scrollable: true,
   alwaysScroll: true,
-  top: "100%-6",
+  top: `100%-${OUTPUT_SIZE}`,
   wrap: true,
   border: false,
   valign: 'bottom',
@@ -124,7 +154,7 @@ var logger = blessed.log({
   mouse: true,
   keys: true,
   width: '100%',
-  height: OUTPUT_SIZE - 1,
+  height: OUTPUT_SIZE,
   style: {
   },
   content: ""
@@ -153,7 +183,7 @@ var progress = blessed.progressbar({
 var title = blessed.text({ parent: screen, top: '1', tags: true, content: 'Android TV Tools, {red-fg}Yes!{/red-fg}' });
 
 
-var data = [ [ 'Package',  'Version',  'Can Open?',   'Options' ] ];
+
 
 
 screen.key(['q', 'escape'], function() {
@@ -163,17 +193,19 @@ screen.key(['q', 'escape'], function() {
 });
 
 screen.key(['z'], function() {
-  () => _chose_item(data[table.selected][0]);
+  () => _chose_item(data.all()[table.selected][0]);
 });
 
 screen.key(['enter'], function() {
-  log(data[table.selected][0]);
+  // log(data.all()[table.selected][0]);
+  j.queue(`monkey -p ${data.all()[table.selected][0]} 1`, (x) => log(x));
+  j.play();
 });
 
 
 table.focus();
 
-table.setData(data);
+// table.setData(data.all());
 
 screen.append(table);
 screen.append(title);
@@ -181,30 +213,40 @@ screen.append(logger);
 screen.append(progress);
 
 
-table.setData(data);
-
 screen.render();
 
-progress.on('complete', () => save('data.json', data));
+progress.on('complete', () => data.persist());
 
 
 const {Jatty, JattyDebug} =  require('./jatty');
 
-
 j = Jatty("172.30.7.97", logger);
 j.connect();
 
-let pass_thru = (x) => x;
-let add_entry = (z, y) => add([y, z, [true, false][Math.floor(Math.random()*2)]]);
-let clean_lines = (x) => x.split(/\r?\n/).map(y => y.trim()).filter(z => z != "");
-let clean_version = (b) => b.substr(b.lastIndexOf("versionName=")).trim();
-let clean_package = (x) => x.substr(x.lastIndexOf("=") + 1);
-let can_open_package = (x) => j.queue(`monkey -p ${x} 0`, (x) => add_entry(x, y), clean_version);
-let do_package_version = (y) => j.queue(`dumpsys package ${y.trim()} | grep versionName`, (x) => add_entry(x, y), clean_version);
-let do_all_package_versions = (x) => { x.filter(a => !(/[\/ ]/.test(a))).forEach(do_package_version); log("All work queued successfully!"); }
-let clean_everything = (a) => clean_lines(a).map(clean_package);
+let add_entry = (x) => add(data.read(x));
 
-j.queue("pm list packages -f", do_all_package_versions, clean_everything);
+var data = new Data(add_entry, 'Package', 'Version', 'Can Open?', 'Options');
+table.setData(data.all());
+
+let pass_thru = (x) => x;
+
+// let add_entry = (z, y) => add([y, z, [true, false][Math.floor(Math.random()*2)]]);
+
+let clean_lines = (x) => x.split(/\r?\n/).map(y => y.trim()).filter(z => z != "");
+
+let clean_version = (b) => b.substr(b.lastIndexOf("versionName=")).trim();
+
+let do_all_packages = (x) => { x.filter((a) => !(/[\/ ]/.test(a))).forEach((y) => { data.update(y, PACKAGE, y); do_package_version(y); /* do_can_open(y); */ }); log("All work queued successfully!"); }
+
+let do_package_version = (x) => j.queue(`dumpsys package ${x.trim()} | grep versionName`, (y) => { data.update(x, VERSION, y); if (y == "") do_package_version(x); }, clean_version);
+
+let do_can_open = (x) => j.queue(`monkey -p ${x} 0`, (y) => data.update(x, CANOPEN, y), (x) => x.indexOf("No activities found to run") == -1);
+
+let clean_package = (x) => x.substr(x.lastIndexOf("=") + 1);
+
+let clean_everything = (x) => clean_lines(x).map(clean_package);
+
+j.queue("pm list packages -f", do_all_packages, clean_everything);
 // // j.queue("ls", (x) => x.forEach(y => j.queue(`ls ${y}`, z => console.log(z)),), clean_lines);
 
 j.play();

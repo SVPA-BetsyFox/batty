@@ -64,7 +64,7 @@ var Jatty = function(ip="172.30.7.97", logger=() => undefined) {
     adb.on('exit', () => connect());
     adb.stdout.on('readable', () => recieve(adb.stdout.read()));
     adb.stdout.on('end', () => connect("RECONNECTING..."));
-    adb.stdout.on('finish', () => console.error('All writes are now complete.'));
+    adb.stdout.on('finish', () => log('All writes are now complete.'));
   }
 
 
