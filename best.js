@@ -175,7 +175,6 @@ var logger = blessed.log({
   content: ""
 });
 
-log = (x) => logger.log(x);
 
 
 var progress = blessed.progressbar({
@@ -195,10 +194,27 @@ var progress = blessed.progressbar({
   filled: 0,
 });
 
+
+var prompt = blessed.prompt({
+  parent: screen,
+  border: 'line',
+  height: 'shrink',
+  width: 'half',
+  top: 'center',
+  left: 'center',
+  label: ' {blue-fg}Prompt{/blue-fg} ',
+  tags: true,
+  keys: true,
+  vi: true
+});
+
+screen.append(prompt);
+
 var title = blessed.text({ parent: screen, top: '1', tags: true, content: 'Android TV Tools, {red-fg}Yes!{/red-fg}' });
 
 
 
+var log = (x) => logger.log(x);
 
 
 screen.key(['q', 'escape'], function() {
@@ -232,11 +248,14 @@ screen.render();
 
 progress.on('complete', () => data.persist());
 
+ip = "";
+prompt.input("what time is love", "172.30.7.97", (x) => go(x));
 
+function go(ip) {
 const {Jatty, JattyDebug} =  require('./jatty');
-let conf = load("config.json");
+// let conf = load("config.json");
 // let ip = conf ? conf.ip : "172.30.7.97"
-j = Jatty(conf ? conf.ip : "172.30.7.97", logger);
+j = Jatty(ip, logger);
 j.connect();
 
 let add_entry = (x) => add(data.read(x));
@@ -266,3 +285,4 @@ j.queue("pm list packages -f", do_all_packages, clean_everything);
 // // j.queue("ls", (x) => x.forEach(y => j.queue(`ls ${y}`, z => console.log(z)),), clean_lines);
 
 j.play();
+}
