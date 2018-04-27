@@ -58,12 +58,27 @@ class Data {
 }
 
 
+let load = function(filename) {
+  let out = {};
+  try {
+    out = JSON.parse(fs.readFileSync(filename));
+  } catch(e) {
+    console.log(e);
+  } 
+  return out;
+}
+
 
 let save = function(filename, serializable, raw=false) {
   let success = true;
   serializable = raw ? serializable : JSON.stringify(serializable)
-  fs.writeFile(filename, serializable, (err) => success = false);
-  return success;
+  try {
+    fs.writeFileSync(filename, serializable);
+    return true;
+  } catch(e) {
+    console.log(e);
+    return false;
+  }
 }
 
 let format_rows = (x) => x.map(x => x.map(y => y.toString()));
@@ -197,8 +212,8 @@ screen.key(['z'], function() {
 });
 
 screen.key(['enter'], function() {
-  // log(data.all()[table.selected][0]);
-  j.queue(`monkey -p ${data.all()[table.selected][0]} 1`, (x) => log(x));
+  let package = data.all()[table.selected][0]
+  j.queue(`monkey -p ${package} 1`, (x) => { log(x.toString()); data.update(package, CANOPEN, x);}, (x) => x.indexOf("injected") > -1);
   j.play();
 });
 
@@ -219,8 +234,9 @@ progress.on('complete', () => data.persist());
 
 
 const {Jatty, JattyDebug} =  require('./jatty');
-
-j = Jatty("172.30.7.97", logger);
+let conf = load("config.json");
+// let ip = conf ? conf.ip : "172.30.7.97"
+j = Jatty(conf ? conf.ip : "172.30.7.97", logger);
 j.connect();
 
 let add_entry = (x) => add(data.read(x));
