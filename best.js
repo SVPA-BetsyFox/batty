@@ -6,34 +6,43 @@ let OUTPUT_SIZE = 6;
 const PACKAGE = 'Package';
 const VERSION = 'Version';
 const CANOPEN = 'Can Open?';
-const OPTIONS = 'Options';
+const IGNORE = 'Ignored';
+
+const SERIAL_PROPNAME = 'ro.boot.serialno';
 
 
 class Data {
   constructor(...fieldnames) {
+    this.name = "data";
     this.debug = "";
     // save("data", fieldnames)q
     this.cb = (typeof fieldnames[0] == "function") ? this.cb = fieldnames.shift() : () => undefined;
     this.fieldnames = fieldnames;
     this.obj = {};
+    this.meta = {};
+  }
+
+  set_name(new_name) {
+    this.name = new_name.replace(/\W/ig, "");
   }
 
   persist() {
-    return save("data.json", this.obj);
+    return (save(`${this.name}.json`, this.obj) && save(`${this.name}.meta.json`, this.meta));
   }
 
-  restore() {
-    this.obj = load("data.json");
+  restore(serial) {
+    this.obj = load(`${serial}.json`);
   }
 
   record_complete(id) {
+    return (Object.keys(this.obj[id]).length == this.fieldnames.length);
     // Object.keys(this.obj[id]).sort() == this.fieldnames.sort();
     // save("record.json", { record: Object.keys(this.obj[id]).sort(), base: this.fieldnames.sort() })
   }
 
   update(id, fieldname, value) {
-    this.debug += `UPDATE CALLED WITH ID="${id}", FIELD="${fieldname}", VALUE="${value}"` + "-".repeat(25) + "\n";
-    save("debug.txt", this.debug, true);
+    // this.debug += `UPDATE CALLED WITH ID="${id}", FIELD="${fieldname}", VALUE="${value}"` + "-".repeat(25) + "\n";
+    // save("debug.txt", this.debug, true);
     if (!fieldname in this.fieldnames) return false;
     if (!(id in this.obj)) this.obj[id] = {};
     this.obj[id][fieldname] = value;
@@ -46,6 +55,16 @@ class Data {
     else return this.fieldnames.map(x => "");
   }
 
+  update_meta(key, value) {
+    this.meta[key] = value;
+    if (key == SERIAL_PROPNAME) this.set_name(value);
+    return true;
+  }
+
+  read_meta(key) {
+    return (key in Object.keys(this.meta)) ? this.meta[key] : undefined;
+  }
+
   all() {
     let out = [];
     for (let id of Object.keys(this.obj).sort()) {
@@ -54,6 +73,10 @@ class Data {
     // out.sort((a, b) => a[0].localeCompare(b[0]));
     out.unshift(this.fieldnames);
     return out;
+  }
+
+  all_meta() {
+    return this.meta;
   }
 }
 
@@ -208,8 +231,6 @@ var prompt = blessed.prompt({
   vi: true
 });
 
-screen.append(prompt);
-
 var title = blessed.text({ parent: screen, top: '1', tags: true, content: 'Android TV Tools, {red-fg}Yes!{/red-fg}' });
 
 
@@ -228,9 +249,13 @@ screen.key(['z'], function() {
 });
 
 screen.key(['enter'], function() {
-  let package = data.all()[table.selected][0]
-  j.queue(`monkey -p ${package} 1`, (x) => { log(x.toString()); data.update(package, CANOPEN, x);}, (x) => x.indexOf("injected") > -1);
-  j.play();
+  let [package, version, canopen, ignored] = data.all()[table.selected];
+  if (canopen) {
+    j.queue(`monkey -p ${package} 1`, (x) => { log(x.toString()); data.update(package, CANOPEN, x);}, (x) => x.indexOf("injected") > -1);
+    j.play();
+  } else {
+    log(`Attempted to open ${package}, but the package has no activities that can be launched interactively.`);
+  }
 });
 
 
@@ -248,41 +273,42 @@ screen.render();
 
 progress.on('complete', () => data.persist());
 
-ip = "";
-prompt.input("what time is love", "172.30.7.97", (x) => go(x));
 
-function go(ip) {
 const {Jatty, JattyDebug} =  require('./jatty');
-// let conf = load("config.json");
+let conf = load("config.json");
 // let ip = conf ? conf.ip : "172.30.7.97"
-j = Jatty(ip, logger);
+j = Jatty(conf ? conf.ip : "172.30.7.97", logger);
 j.connect();
 
 let add_entry = (x) => add(data.read(x));
 
-var data = new Data(add_entry, 'Package', 'Version', 'Can Open?', 'Options');
+var data = new Data(add_entry,  PACKAGE, VERSION, CANOPEN, IGNORE);
 table.setData(data.all());
+
+let is_ignored = (x) => (data.read(x)[3] != "") ? data.read(x)[3] : false;
 
 let pass_thru = (x) => x;
 
-// let add_entry = (z, y) => add([y, z, [true, false][Math.floor(Math.random()*2)]]);
-
 let clean_lines = (x) => x.split(/\r?\n/).map(y => y.trim()).filter(z => z != "");
 
-let clean_version = (b) => b.substr(b.lastIndexOf("versionName=")).trim();
+let clean_version = (x) => x.substr(x.lastIndexOf("versionName=")).trim();
+
+let do_props = (x) => x.forEach((y) => data.update_meta(...y));
 
 let do_all_packages = (x) => { x.filter((a) => !(/[\/ ]/.test(a))).forEach((y) => { data.update(y, PACKAGE, y); do_package_version(y); /* do_can_open(y); */ }); log("All work queued successfully!"); }
 
 let do_package_version = (x) => j.queue(`dumpsys package ${x.trim()} | grep versionName`, (y) => { data.update(x, VERSION, y); if (y == "") do_package_version(x); }, clean_version);
 
-let do_can_open = (x) => j.queue(`monkey -p ${x} 0`, (y) => data.update(x, CANOPEN, y), (x) => x.indexOf("No activities found to run") == -1);
+let do_can_open = (x) => (data.read(x)[2] != "") ? data.read(x)[2] : j.queue(`monkey -p ${x} 0`, (y) => data.update(x, CANOPEN, y), (x) => x.indexOf("No activities found to run") == -1);
 
 let clean_package = (x) => x.substr(x.lastIndexOf("=") + 1);
+let clean_prop = (x) => { let raw = x.substr(1,x.length-2).split("]: ["); return [raw.shift(), raw.join("]: [")]; }
 
 let clean_everything = (x) => clean_lines(x).map(clean_package);
+let clean_props = (x) => clean_lines(x).map(clean_prop);
 
+j.queue("getprop", do_props, clean_props);
 j.queue("pm list packages -f", do_all_packages, clean_everything);
 // // j.queue("ls", (x) => x.forEach(y => j.queue(`ls ${y}`, z => console.log(z)),), clean_lines);
 
 j.play();
-}

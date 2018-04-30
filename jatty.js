@@ -1,14 +1,16 @@
+var fs = require('fs');
+
 // console.log("I'M IN JATTY.JS");
 var debug = {
     get: function(obj, prop, receiver) {
       // console.log(`===== [DEBUG] "${prop}" was called`);
       if (prop in obj) {
         if (typeof obj[prop] != "function") {
-          console.log(prop + " was accessed");
+          obj.log(prop + " was accessed");
           return obj[prop];
         } else {
           return (...args) => {
-            console.log(prop + " was called with " + args[0]);
+            obj.log(prop + " was called with " + args[0]);
             // if (prop == "queue") console.log(prop + " was called with " + args[0]);
             return obj[prop](...args);
           }
@@ -18,6 +20,20 @@ var debug = {
       }
       }
   }
+
+
+var log_stream = fs.createWriteStream("jatty.log", {flags:'a'});
+
+    
+let spitlog = function(...data) {
+  try {
+    data.forEach((x) => log_stream.write(x.toString()));
+    return true;
+  } catch(e) {
+    console.log(e);
+    return false;
+  }
+}
 
 var Jatty = function(ip="172.30.7.97", logger=() => undefined) {
   // let log = log;
@@ -105,7 +121,7 @@ var Jatty = function(ip="172.30.7.97", logger=() => undefined) {
 
 
   var recieve = function(data) {
-    // log("Recieving data!");
+    spitlog(data);
     if ((data == undefined) || (data == null)) {
       if (Date.now() - last_output_ts > DEFAULT_TIMEOUT) flush();
       if (Date.now() - last_output_ts > PROCESS_TIMEOUT) process.exit("OH GOD TIMEOUT");
