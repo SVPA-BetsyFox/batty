@@ -24,10 +24,10 @@ var debug = {
 
 var log_stream = fs.createWriteStream("jatty.log", {flags:'a'});
 
-    
+
 let spitlog = function(...data) {
   try {
-    data.forEach((x) => log_stream.write(x.toString()));
+    data.forEach(x => { if (![null, undefined].includes(x)) log_stream.write(x.toString()); });
     return true;
   } catch(e) {
     console.log(e);
@@ -36,7 +36,6 @@ let spitlog = function(...data) {
 }
 
 var Jatty = function(ip="172.30.7.97", logger=() => undefined) {
-  // let log = log;
   let log = (x) => logger.log(x);
   const { spawn, spawnSync } = require('child_process');
   const PROMPT = /shell@[A-Za-z0-9-_.]+:\/ \$/;
@@ -91,21 +90,32 @@ var Jatty = function(ip="172.30.7.97", logger=() => undefined) {
   var last_output_ts = Date.now();
 
   var reset_timer = function(t=10000) {
-    // console.log("Timeout counter was reset!");
     clearTimeout(timeout);
     timeout = setTimeout(() => {
       flush();
-      // console.log("----------------------------------------------------------------------");
-      // console.log(output);
       process.exit(1);
-    },
-    t)
+    }, t);
   }
 
 
   var flush = function() {
-    // log("Flushing!");
+    // log("Flushing input buffer");
     stop_timer();
+
+    // if command length is greater than 50 chars, we're going to get extra stdout garbage we need to
+    // clean, and then for every subsequent 25 chars over those 50 chars, we'll have another stdout
+    // input event.
+    if (current_task.cmd) {
+      let cmd_length = current_task.cmd.length;
+      if (cmd_length > 50) {
+        cmd_length -= 50;
+        temp.shift();
+        while (cmd_length > 25) {
+          cmd_length -= 25;
+          temp.shift();
+        }
+      }
+    }
     if (current_task && "clean" in current_task) {
       temp = current_task["clean"](temp.join(""));
     }
@@ -121,22 +131,24 @@ var Jatty = function(ip="172.30.7.97", logger=() => undefined) {
 
 
   var recieve = function(data) {
-    spitlog(data);
+    spitlog("< RECV < ", data);
     if ((data == undefined) || (data == null)) {
       if (Date.now() - last_output_ts > DEFAULT_TIMEOUT) flush();
       if (Date.now() - last_output_ts > PROCESS_TIMEOUT) process.exit("OH GOD TIMEOUT");
       return;
     }
     if (PROMPT.test(data)) flush();
-    else temp.push(data.toString());
+    else if (data) temp.push(data.toString());
 
     last_output_ts = Date.now();
   }
 
 
   var send = function(data="") {
+    log(`Executing ${data}`);
     running = false;
     reset_timer();
+    spitlog("> SEND > ", data + "\n");
     adb.stdin.write(data + "\n");
     running = true;
     if (data == "exit") stop();

@@ -1,5 +1,7 @@
 var blessed = require('blessed')
 var fs = require('fs')
+var app_filter = require('./app_filter')
+
 let OUTPUT_SIZE = 6;
 
 //field labels
@@ -8,14 +10,13 @@ const VERSION = 'Version';
 const CANOPEN = 'Can Open?';
 const IGNORE = 'Ignored';
 
-const SERIAL_PROPNAME = 'ro.boot.serialno';
+const SERIAL_PROPNAME = 'ro.serialno';
 
 
 class Data {
   constructor(...fieldnames) {
     this.name = "data";
     this.debug = "";
-    // save("data", fieldnames)q
     this.cb = (typeof fieldnames[0] == "function") ? this.cb = fieldnames.shift() : () => undefined;
     this.fieldnames = fieldnames;
     this.obj = {};
@@ -23,15 +24,20 @@ class Data {
   }
 
   set_name(new_name) {
-    this.name = new_name.replace(/\W/ig, "");
+    // this.name = "device";
+    if (new_name !== undefined) this.name = new_name.replace(/\W/ig, "");
+  }
+
+  get_name() {
+    return this.name;
   }
 
   persist() {
     return (save(`${this.name}.json`, this.obj) && save(`${this.name}.meta.json`, this.meta));
   }
 
-  restore(serial) {
-    this.obj = load(`${serial}.json`);
+  restore() {
+    this.obj = load(`${this.name}.json`);
   }
 
   record_complete(id) {
@@ -41,8 +47,6 @@ class Data {
   }
 
   update(id, fieldname, value) {
-    // this.debug += `UPDATE CALLED WITH ID="${id}", FIELD="${fieldname}", VALUE="${value}"` + "-".repeat(25) + "\n";
-    // save("debug.txt", this.debug, true);
     if (!fieldname in this.fieldnames) return false;
     if (!(id in this.obj)) this.obj[id] = {};
     this.obj[id][fieldname] = value;
@@ -57,12 +61,12 @@ class Data {
 
   update_meta(key, value) {
     this.meta[key] = value;
-    if (key == SERIAL_PROPNAME) this.set_name(value);
+    if ((key == SERIAL_PROPNAME) && (value != null) && (value != undefined)) this.set_name(value);
     return true;
   }
 
   read_meta(key) {
-    return (key in Object.keys(this.meta)) ? this.meta[key] : undefined;
+    return (key in Object.keys(this.meta)) ? this.meta[key] : "";
   }
 
   all() {
@@ -70,13 +74,16 @@ class Data {
     for (let id of Object.keys(this.obj).sort()) {
       out.push(this.read(id));
     }
-    // out.sort((a, b) => a[0].localeCompare(b[0]));
     out.unshift(this.fieldnames);
     return out;
   }
 
   all_meta() {
     return this.meta;
+  }
+
+  count() {
+    return Object.keys(this.obj).length;
   }
 }
 
@@ -126,7 +133,6 @@ let filter = (query) => {
 
 
 let clear = (row) => {
-    // data.push(row);
     table.setData(data.all());
     screen.render();
   }
@@ -214,7 +220,7 @@ var progress = blessed.progressbar({
   },
   ch: " ",
   width: '100%',
-  filled: 0,
+  filled: 1,
 });
 
 
@@ -235,7 +241,8 @@ var title = blessed.text({ parent: screen, top: '1', tags: true, content: 'Andro
 
 
 
-var log = (x) => logger.log(x);
+var log = (...x) => logger.log(...x);
+
 
 
 screen.key(['q', 'escape'], function() {
@@ -271,9 +278,6 @@ screen.append(progress);
 
 screen.render();
 
-progress.on('complete', () => data.persist());
-
-
 const {Jatty, JattyDebug} =  require('./jatty');
 let conf = load("config.json");
 // let ip = conf ? conf.ip : "172.30.7.97"
@@ -282,8 +286,10 @@ j.connect();
 
 let add_entry = (x) => add(data.read(x));
 
-var data = new Data(add_entry,  PACKAGE, VERSION, CANOPEN, IGNORE);
+var data = new Data(add_entry, PACKAGE, VERSION, CANOPEN, IGNORE);
 table.setData(data.all());
+
+progress.on('complete', () => { title.content = `Android TV Tools, Yes!  Serial: ${data.get_name()}`; data.persist(); });
 
 let is_ignored = (x) => (data.read(x)[3] != "") ? data.read(x)[3] : false;
 
@@ -291,11 +297,11 @@ let pass_thru = (x) => x;
 
 let clean_lines = (x) => x.split(/\r?\n/).map(y => y.trim()).filter(z => z != "");
 
-let clean_version = (x) => x.substr(x.lastIndexOf("versionName=")).trim();
+let clean_version = (x) => x.substr(x.lastIndexOf("versionName=")).trim().substring(12);
 
-let do_props = (x) => x.forEach((y) => data.update_meta(...y));
+let do_props = (x) => { x.forEach((y) => data.update_meta(...y)); data.set_name(); };
 
-let do_all_packages = (x) => { x.filter((a) => !(/[\/ ]/.test(a))).forEach((y) => { data.update(y, PACKAGE, y); do_package_version(y); /* do_can_open(y); */ }); log("All work queued successfully!"); }
+let do_all_packages = (x) => { x.filter((a) => !(/[\/ ]/.test(a))).forEach((y) => { data.update(y, PACKAGE, y); do_package_version(y); if (app_filter(y)) do_can_open(y); }); log("All work queued successfully!"); }
 
 let do_package_version = (x) => j.queue(`dumpsys package ${x.trim()} | grep versionName`, (y) => { data.update(x, VERSION, y); if (y == "") do_package_version(x); }, clean_version);
 
@@ -307,6 +313,7 @@ let clean_prop = (x) => { let raw = x.substr(1,x.length-2).split("]: ["); return
 let clean_everything = (x) => clean_lines(x).map(clean_package);
 let clean_props = (x) => clean_lines(x).map(clean_prop);
 
+j.queue("date");
 j.queue("getprop", do_props, clean_props);
 j.queue("pm list packages -f", do_all_packages, clean_everything);
 // // j.queue("ls", (x) => x.forEach(y => j.queue(`ls ${y}`, z => console.log(z)),), clean_lines);
