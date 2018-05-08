@@ -50,6 +50,7 @@ class Data {
     if (!fieldname in this.fieldnames) return false;
     if (!(id in this.obj)) this.obj[id] = {};
     this.obj[id][fieldname] = value;
+    this.obj[id]["_sortkey"] = `${(this.obj[id][CANOPEN] === true) ? 0 : (this.obj[id][CANOPEN] === false) ? 1 : 2}${this.obj[id][PACKAGE]}`;
     if(Object.keys(this.obj[id])) this.cb(id);
     return true;
   }
@@ -61,7 +62,10 @@ class Data {
 
   update_meta(key, value) {
     this.meta[key] = value;
-    if ((key == SERIAL_PROPNAME) && (value != null) && (value != undefined)) this.set_name(value);
+    if ((key == SERIAL_PROPNAME) && (value != null) && (value != undefined)) {
+      this.set_name(value);
+      this.restore();
+    }
     return true;
   }
 
@@ -70,10 +74,9 @@ class Data {
   }
 
   all() {
-    let out = [];
-    for (let id of Object.keys(this.obj).sort()) {
-      out.push(this.read(id));
-    }
+    let out =[]
+    let tmp = Object.keys(this.obj).map(x => this.obj[x]).sort((a, b) => a["_sortkey"].localeCompare(b["_sortkey"]));
+    tmp.forEach(x => out.push(this.fieldnames.map(fieldname => (fieldname in x) ? x[fieldname] : "")));
     out.unshift(this.fieldnames);
     return out;
   }
@@ -154,6 +157,19 @@ var screen = blessed.screen();
 
 var _chose_item = () => undefined;
 
+// var prompt = blessed.prompt({
+//   parent: screen,
+//   border: 'line',
+//   height: 'shrink',
+//   width: 'half',
+//   top: 'center',
+//   left: 'center',
+//   label: ' {blue-fg}Prompt{/blue-fg} ',
+//   tags: true,
+//   keys: true,
+//   vi: true
+// });
+
 var table = blessed.listtable({
   parent: screen,
   scrollbar: {
@@ -204,8 +220,6 @@ var logger = blessed.log({
   content: ""
 });
 
-
-
 var progress = blessed.progressbar({
   top: "100%-1",
   border: false,
@@ -221,20 +235,6 @@ var progress = blessed.progressbar({
   ch: " ",
   width: '100%',
   filled: 1,
-});
-
-
-var prompt = blessed.prompt({
-  parent: screen,
-  border: 'line',
-  height: 'shrink',
-  width: 'half',
-  top: 'center',
-  left: 'center',
-  label: ' {blue-fg}Prompt{/blue-fg} ',
-  tags: true,
-  keys: true,
-  vi: true
 });
 
 var title = blessed.text({ parent: screen, top: '1', tags: true, content: 'Android TV Tools, {red-fg}Yes!{/red-fg}' });
@@ -269,7 +269,7 @@ screen.key(['enter'], function() {
 table.focus();
 
 // table.setData(data.all());
-
+// screen.append(prompt);
 screen.append(table);
 screen.append(title);
 screen.append(logger);
@@ -281,7 +281,7 @@ screen.render();
 const {Jatty, JattyDebug} =  require('./jatty');
 let conf = load("config.json");
 // let ip = conf ? conf.ip : "172.30.7.97"
-j = Jatty(conf ? conf.ip : "172.30.7.97", logger);
+j = Jatty(conf ? conf.ip : "172.30.7.66:4321", logger);
 j.connect();
 
 let add_entry = (x) => add(data.read(x));

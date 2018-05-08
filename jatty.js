@@ -35,10 +35,10 @@ let spitlog = function(...data) {
   }
 }
 
-var Jatty = function(ip="172.30.7.97", logger=() => undefined) {
+var Jatty = function(ip="172.30.7.66:4321", logger=() => undefined) {
   let log = (x) => logger.log(x);
   const { spawn, spawnSync } = require('child_process');
-  const PROMPT = /shell@[A-Za-z0-9-_.]+:\/ \$/;
+  const PROMPT = /[A-Za-z0-9-_.]+:\/ (\$|#)/;
   const DEFAULT_TIMEOUT = 10000;
   const PROCESS_TIMEOUT = 30000;
 
@@ -73,11 +73,13 @@ var Jatty = function(ip="172.30.7.97", logger=() => undefined) {
   var connect = function(msg) {
     log("Connecting!");
     // if (msg !== undefined) console.log(msg);
-    status = spawnSync('adb', ['connect', ip]).toString();
+    connstatus = spawnSync('adb', ['connect', ip]).toString();
     adb = spawn('adb', ['shell']);
+    // console.log(adb);
     // adb.stdout.pipe(process.stdout);
     adb.on('exit', () => connect());
-    adb.stdout.on('readable', () => recieve(adb.stdout.read()));
+    // adb.stdout.on('readable', () => receive(adb.stdout.read()));
+    adb.stdout.on('readable', () => { let x = adb.stdout.read(); console.log(x); receive(x); });
     adb.stdout.on('end', () => connect("RECONNECTING..."));
     adb.stdout.on('finish', () => log('All writes are now complete.'));
   }
@@ -105,23 +107,28 @@ var Jatty = function(ip="172.30.7.97", logger=() => undefined) {
     // if command length is greater than 50 chars, we're going to get extra stdout garbage we need to
     // clean, and then for every subsequent 25 chars over those 50 chars, we'll have another stdout
     // input event.
-    if (current_task.cmd) {
-      let cmd_length = current_task.cmd.length;
-      if (cmd_length > 50) {
-        cmd_length -= 50;
-        temp.shift();
-        while (cmd_length > 25) {
-          cmd_length -= 25;
-          temp.shift();
-        }
+    // UPDATE: this... is different in Android 8 apparently. oh god why.
+    if (current_task) {
+      // if ("cmd" in current_task) {
+      //   let cmd_length = current_task.cmd.length;
+      //   if (cmd_length > 50) {
+      //     cmd_length -= 50;
+      //     temp.shift();
+      //     while (cmd_length > 25) {
+      //       cmd_length -= 25;
+      //       temp.shift();
+      //     }
+      //   }
+      // }
+      if ("clean" in current_task) {
+        temp = current_task["clean"](temp.join(""));
+      }
+      output = temp;
+      temp = [];
+      if ("cb" in current_task) {
+        current_task["cb"](output);
       }
     }
-    if (current_task && "clean" in current_task) {
-      temp = current_task["clean"](temp.join(""));
-    }
-    output = temp;
-    temp = [];
-    (current_task && "cb" in current_task) ? current_task["cb"](output) : null;
     if (running && (current_task = tasks.shift()) !== undefined && "cmd" in current_task) {
       send(current_task["cmd"]);
     }
@@ -130,7 +137,8 @@ var Jatty = function(ip="172.30.7.97", logger=() => undefined) {
   }
 
 
-  var recieve = function(data) {
+  var receive = function(data) {
+    console.log(data);
     spitlog("< RECV < ", data);
     if ((data == undefined) || (data == null)) {
       if (Date.now() - last_output_ts > DEFAULT_TIMEOUT) flush();
@@ -145,6 +153,7 @@ var Jatty = function(ip="172.30.7.97", logger=() => undefined) {
 
 
   var send = function(data="") {
+    console.log("WE'RE SENDING DATA: ", data);
     log(`Executing ${data}`);
     running = false;
     reset_timer();
@@ -159,7 +168,7 @@ var Jatty = function(ip="172.30.7.97", logger=() => undefined) {
   return {
     connect: connect,
     send: send,
-    recieve: recieve,
+    receive: receive,
     flush: flush,
     stop_timer: stop_timer,
     pause: pause,
