@@ -100,7 +100,7 @@ def adb(ip, cmd):
 
 # Attempts to connect to the specified IP address as an Android device over ADB.
 # Any problems here will likely be network related
-def connect(ip, port=5555, max_attempts=3):
+def connect(ip, port=4321, max_attempts=3):
   attempts = 0
   status = False
   while not status and attempts < max_attempts:
