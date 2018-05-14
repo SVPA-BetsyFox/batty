@@ -222,7 +222,7 @@ def process_app(ip, app_data, count):
   debug(out)
   return out
 
-def reset_rotation():
+def reset_rotation(ip):
   return adb(ip, 'shell content insert --uri content://settings/system --bind name:s:accelerometer_rotation --bind value:i:0')
   #adb shell content insert --uri content://settings/system --bind name:s:accelerometer_rotation --bind value:i:0
 
@@ -231,7 +231,7 @@ def open_app(ip, package):
   debug(f'CALLED OPEN_APP FOR IP: "{ip}", PACKAGE: "{package}"')
   debug(f'shell monkey -p {package} 1')
   raw = adb(ip, f'shell monkey -p {package} 1')
-  reset_rotation()
+  reset_rotation(ip)
   return "No activities found to run" in raw
 
 
@@ -242,7 +242,7 @@ def can_open_app(ip, package):
     return False
   else:
     raw = adb(ip, f'shell monkey -p {package} 0')
-    reset_rotation()
+    reset_rotation(ip)
     if "No activities found to run" in raw:
       open_blacklist.append(package)
       save_json(filename, open_blacklist)
