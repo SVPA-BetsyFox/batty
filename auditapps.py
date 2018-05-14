@@ -242,7 +242,7 @@ def can_open_app(ip, package):
     return False
   else:
     raw = adb(ip, f'shell monkey -p {package} 0')
-    reset_rotation(ip)
+    # reset_rotation(ip)
     if "No activities found to run" in raw:
       open_blacklist.append(package)
       save_json(filename, open_blacklist)
