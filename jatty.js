@@ -1,6 +1,5 @@
 var fs = require('fs');
 
-// console.log("I'M IN JATTY.JS");
 var debug = {
     get: function(obj, prop, receiver) {
       // console.log(`===== [DEBUG] "${prop}" was called`);
@@ -37,7 +36,8 @@ let spitlog = function(...data) {
 
 var Jatty = function(ip="172.30.7.66:4321", logger=() => undefined) {
   let log = (x) => logger.log(x);
-  const { spawn, spawnSync } = require('child_process');
+  const { spawnSync } = require('child_process');
+  const { spawn } = require('pty.js');
   const PROMPT = /[A-Za-z0-9-_.]+:\/ (\$|#)/;
   const DEFAULT_TIMEOUT = 10000;
   const PROCESS_TIMEOUT = 30000;
@@ -79,7 +79,8 @@ var Jatty = function(ip="172.30.7.66:4321", logger=() => undefined) {
     // adb.stdout.pipe(process.stdout);
     adb.on('exit', () => connect());
     // adb.stdout.on('readable', () => receive(adb.stdout.read()));
-    adb.stdout.on('readable', () => { let x = adb.stdout.read(); console.log(x); receive(x); });
+    adb.stdout.on('data', (x) => receive(x));
+    // adb.stdout.on('readable', () => { let x = adb.stdout.read(); console.log(x); receive(x); });
     adb.stdout.on('end', () => connect("RECONNECTING..."));
     adb.stdout.on('finish', () => log('All writes are now complete.'));
   }
@@ -138,7 +139,7 @@ var Jatty = function(ip="172.30.7.66:4321", logger=() => undefined) {
 
 
   var receive = function(data) {
-    console.log(data);
+    log(`Received ${data.length} bytes of data...`)
     spitlog("< RECV < ", data);
     if ((data == undefined) || (data == null)) {
       if (Date.now() - last_output_ts > DEFAULT_TIMEOUT) flush();
@@ -153,7 +154,6 @@ var Jatty = function(ip="172.30.7.66:4321", logger=() => undefined) {
 
 
   var send = function(data="") {
-    console.log("WE'RE SENDING DATA: ", data);
     log(`Executing ${data}`);
     running = false;
     reset_timer();

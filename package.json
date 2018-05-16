@@ -17,6 +17,7 @@
   },
   "homepage": "https://github.com/SVPA-BetsyFox/batty#readme",
   "dependencies": {
-    "blessed": "^0.1.81"
+    "blessed": "^0.1.81",
+    "pty.js": "^0.3.1"
   }
 }

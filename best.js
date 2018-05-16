@@ -157,18 +157,18 @@ var screen = blessed.screen();
 
 var _chose_item = () => undefined;
 
-// var prompt = blessed.prompt({
-//   parent: screen,
-//   border: 'line',
-//   height: 'shrink',
-//   width: 'half',
-//   top: 'center',
-//   left: 'center',
-//   label: ' {blue-fg}Prompt{/blue-fg} ',
-//   tags: true,
-//   keys: true,
-//   vi: true
-// });
+var prompt = blessed.prompt({
+  parent: screen,
+  border: 'line',
+  height: 'shrink',
+  width: 'half',
+  top: 'center',
+  left: 'center',
+  label: ' {blue-fg}PLEASE ENTER AN IP ADDRESS{/blue-fg} ',
+  tags: true,
+  keys: true,
+  vi: true
+});
 
 var table = blessed.listtable({
   parent: screen,
@@ -237,11 +237,13 @@ var progress = blessed.progressbar({
   filled: 1,
 });
 
+
+
 var title = blessed.text({ parent: screen, top: '1', tags: true, content: 'Android TV Tools, {red-fg}Yes!{/red-fg}' });
 
 
 
-var log = (...x) => logger.log(...x);
+var log = (...x) => logger ? logger.log(...x) : console.log(...x);
 
 
 
@@ -269,11 +271,14 @@ screen.key(['enter'], function() {
 table.focus();
 
 // table.setData(data.all());
-// screen.append(prompt);
+screen.append(prompt);
 screen.append(table);
 screen.append(title);
 screen.append(logger);
 screen.append(progress);
+
+table.hide();
+logger.hide();
 
 
 screen.render();
