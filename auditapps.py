@@ -223,7 +223,7 @@ def process_app(ip, app_data, count):
   return out
 
 def reset_rotation(ip):
-  return adb(ip, 'shell content insert --uri content://settings/system --bind name:s:accelerometer_rotation --bind value:i:0')
+  return adb(ip, 'shell settings put system accelerometer_rotation 0')
   #adb shell content insert --uri content://settings/system --bind name:s:accelerometer_rotation --bind value:i:0
 
 def open_app(ip, package):
@@ -316,7 +316,9 @@ def gen_report():
     for app_i, app in enumerate(report_order):
       debug(f'app is {app}, app_i is {app_i}')
       add_report_entry(report[serial]['apps'][app[1:]], app_i)
+  reset_rotation(IP)
   update_progress(100, "Done!")
+
 
 
 # def dummy_report(ip):
