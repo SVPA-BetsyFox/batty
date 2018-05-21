@@ -157,19 +157,6 @@ var screen = blessed.screen();
 
 var _chose_item = () => undefined;
 
-var prompt = blessed.prompt({
-  parent: screen,
-  border: 'line',
-  height: 'shrink',
-  width: 'half',
-  top: 'center',
-  left: 'center',
-  label: ' {blue-fg}PLEASE ENTER AN IP ADDRESS{/blue-fg} ',
-  tags: true,
-  keys: true,
-  vi: true
-});
-
 var table = blessed.listtable({
   parent: screen,
   scrollbar: {
@@ -261,6 +248,7 @@ screen.key(['enter'], function() {
   let [package, version, canopen, ignored] = data.all()[table.selected];
   if (canopen) {
     j.queue(`monkey -p ${package} 1`, (x) => { log(x.toString()); data.update(package, CANOPEN, x);}, (x) => x.indexOf("injected") > -1);
+    j.queue('content insert --uri content://settings/system --bind name:s:accelerometer_rotation --bind value:i:0');
     j.play();
   } else {
     log(`Attempted to open ${package}, but the package has no activities that can be launched interactively.`);
@@ -271,14 +259,14 @@ screen.key(['enter'], function() {
 table.focus();
 
 // table.setData(data.all());
-screen.append(prompt);
+// screen.append(prompt);
 screen.append(table);
 screen.append(title);
 screen.append(logger);
 screen.append(progress);
 
-table.hide();
-logger.hide();
+// table.hide();
+// logger.hide();
 
 
 screen.render();
@@ -286,7 +274,7 @@ screen.render();
 const {Jatty, JattyDebug} =  require('./jatty');
 let conf = load("config.json");
 // let ip = conf ? conf.ip : "172.30.7.97"
-j = Jatty(conf ? conf.ip : "172.30.7.66:4321", logger);
+j = Jatty(conf ? conf.ip : "172.30.7.66", "4321", logger);
 j.connect();
 
 let add_entry = (x) => add(data.read(x));

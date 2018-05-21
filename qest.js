@@ -18,4 +18,4 @@ adb.stdout.on('readable', () => console.log("READABLE STUFF HAPPENING:", String(
 adb.stdout.on('end', () => console.log("end!"));
 adb.stdout.on('finish', () => console.log("finish!"));
 
-adb.stdin.write("\n");
+adb.stdin.write("ls\nexit\n");

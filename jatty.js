@@ -20,8 +20,11 @@ var debug = {
       }
   }
 
+let pad = (x) => x.toString().padStart(2,"0")
+var ts = new Date();
+var log_file = `${ts.getFullYear()}${pad(ts.getMonth())}${pad(ts.getDay())}${pad(ts.getHours())}${pad(ts.getMinutes())}${pad(ts.getSeconds())}_jatty.log`;
 
-var log_stream = fs.createWriteStream("jatty.log", {flags:'a'});
+var log_stream = fs.createWriteStream(log_file, {flags:'a'});
 
 
 let spitlog = function(...data) {
@@ -34,8 +37,12 @@ let spitlog = function(...data) {
   }
 }
 
-var Jatty = function(ip="172.30.7.66:4321", logger=() => undefined) {
-  let log = (x) => logger.log(x);
+var Jatty = function(ip="172.30.7.66", port="4321", logger={log: ()=>undefined}) {
+  console.log(logger.toString());
+  ip = `${ip}:${port}`;
+  let log = (x) => logger['log'](x);
+  let jobs = { total: 0, remaining: 0 };
+
   const { spawnSync } = require('child_process');
   const { spawn } = require('pty.js');
   const PROMPT = /[A-Za-z0-9-_.]+:\/ (\$|#)/;
@@ -46,25 +53,34 @@ var Jatty = function(ip="172.30.7.66:4321", logger=() => undefined) {
   var running = false;
   var temp = [];
   var output = [];
-  let jobs = { total: 0, remaining: 0 };
-  // var _debug = true;
-
-  // var clean = (x="") => x.toString().replace("\r", "");
-  // var debug = (x) => _debug ? console.log(x) : null;
+  
   var finish = () => process.exit(0);
   var stop_timer = () => clearTimeout(timeout);
 
-  var pause = () => { log("Pausing execution..."); running = false; }
-  var play = () => { log("Executing queued tasks..."); current_task ? send(current_task["cmd"]) : send(); }
-  var queue = (cmd, cb=(x)=>x, clean=(y)=>y) => { log(`Queueing "${cmd}"...`); let _running = running; running = false; tasks.push({cmd: cmd, cb: cb, clean: clean}); running = _running; jobs.total++; jobs.remaining++; };
+  var pause = () => {
+    log("Pausing execution...");
+    running = false;
+  }
+
+  var play = () => {
+    log("Executing queued tasks...");
+    current_task ? send(current_task["cmd"]) : send();
+  }
+
+  var queue = (cmd, cb=(x)=>x, clean=(y)=>y) => {
+    log(`Queueing "${cmd}"...`);
+    let _running = running;
+    running = false;
+    tasks.push({cmd: cmd, cb: cb, clean: clean});
+    running = _running;
+    jobs.total++;
+    jobs.remaining++;
+  };
 
 
   var stop = function(stopcode=0) {
     log("Stopping!");
-    // console.log("-    -   -  - - -----= Stop was called- flushing and quitting =----- - -  -   -    -");
     flush();
-    // console.log("LAST OUTPUT:");
-    // console.log(output)
     process.exit(stopcode);
     return true;
   }
@@ -72,21 +88,18 @@ var Jatty = function(ip="172.30.7.66:4321", logger=() => undefined) {
 
   var connect = function(msg) {
     log("Connecting!");
-    // if (msg !== undefined) console.log(msg);
-    connstatus = spawnSync('adb', ['connect', ip]).toString();
+    connstatus = JSON.stringify(spawnSync('adb', ['connect', ip]).output.toString());
     adb = spawn('adb', ['shell']);
-    // console.log(adb);
-    // adb.stdout.pipe(process.stdout);
+    adb.on('error', (...x) => console.log(JSON.stringify(x)));
     adb.on('exit', () => connect());
-    // adb.stdout.on('readable', () => receive(adb.stdout.read()));
     adb.stdout.on('data', (x) => receive(x));
-    // adb.stdout.on('readable', () => { let x = adb.stdout.read(); console.log(x); receive(x); });
     adb.stdout.on('end', () => connect("RECONNECTING..."));
     adb.stdout.on('finish', () => log('All writes are now complete.'));
+    // adb.stdout.on('readable', () => receive(adb.stdout.read()));
   }
 
 
-  var tasks = [];//[{cmd: "pm list packages -f", clean: clean }, {cmd: "exit", clean: finish}];
+  var tasks = [];
   var current_task = {};
   var output = [];
 
@@ -140,10 +153,10 @@ var Jatty = function(ip="172.30.7.66:4321", logger=() => undefined) {
 
   var receive = function(data) {
     log(`Received ${data.length} bytes of data...`)
-    spitlog("< RECV < ", data);
+    spitlog("<< RECV <<", data, "<< RECVD <<\n");
     if ((data == undefined) || (data == null)) {
       if (Date.now() - last_output_ts > DEFAULT_TIMEOUT) flush();
-      if (Date.now() - last_output_ts > PROCESS_TIMEOUT) process.exit("OH GOD TIMEOUT");
+      if (Date.now() - last_output_ts > PROCESS_TIMEOUT) process.exit(`Timed out (${Date.now()})`);
       return;
     }
     if (PROMPT.test(data)) flush();
@@ -157,7 +170,7 @@ var Jatty = function(ip="172.30.7.66:4321", logger=() => undefined) {
     log(`Executing ${data}`);
     running = false;
     reset_timer();
-    spitlog("> SEND > ", data + "\n");
+    spitlog(">> SEND >>", data + ">> SENT >>\n");
     adb.stdin.write(data + "\n");
     running = true;
     if (data == "exit") stop();
